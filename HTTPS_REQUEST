@@ -1,0 +1,97 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <BearSSLHelpers.h>
+#include <ArduinoJson.h>
+
+// Wi-Fi Credentials
+const char* ssid = "YOUR_SSID_NETWORK";
+const char* password = "YOUR_PASSWORD_NETWORK";
+
+// URL da API
+String API_URL_GET = "YOUR_ENDPOINT_API";
+
+const int led1Pin = D0; 
+const int led2Pin = D1; 
+const int led3Pin = D2; 
+const int led4Pin = D3; 
+
+// Cliente HTTPS
+BearSSL::WiFiClientSecure client;
+HTTPClient https;
+
+void setup() {
+  Serial.begin(115200);
+  delay(5000);
+
+  pinMode(led1Pin, OUTPUT);
+  pinMode(led2Pin, OUTPUT);
+  pinMode(led3Pin, OUTPUT);
+  pinMode(led4Pin, OUTPUT);
+
+  setup_wifi();
+  client.setInsecure();
+  HTTPS_GET(API_URL_GET);
+}
+
+void setup_wifi() {
+  Serial.print("\nConnecting to ");
+  Serial.println("\"" + String(ssid) + "\"");
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void HTTPS_GET(String url) { 
+
+  if (https.begin(client, url)) {
+
+    int httpsCode = https.GET();
+
+    if (httpsCode > 0) {
+      
+      if (httpsCode == HTTP_CODE_OK) {
+
+        String ServerResponse = https.getString();
+        Serial.println(ServerResponse);
+
+        DynamicJsonDocument doc(1024);
+        DeserializationError error = deserializeJson(doc, ServerResponse);
+
+        if (error) {
+          Serial.print("Failed to parse JSON: ");
+          Serial.println(error.f_str());
+          return;
+        }
+
+        // Acessar os valores do JSON conforme a API
+        int led1 = doc["led1"];
+        int led2 = doc["led2"];
+        int led3 = doc["led3"];
+        int led4 = doc["led4"];
+
+        digitalWrite(led1Pin, led1);
+        digitalWrite(led2Pin, led2);
+        digitalWrite(led3Pin, led3);
+        digitalWrite(led4Pin, led4);
+
+      }
+    } else {
+      Serial.print("Failed to GET, error: ");
+      Serial.println(https.errorToString(httpsCode).c_str());
+    }
+    https.end();
+  } else {
+    Serial.println("Failed to connect to server");
+  }
+}
+
+void loop() {
+  HTTPS_GET(API_URL_GET); 
+  delay(1000); // Delay para request Cuidado com o max_connections_per_hour da API!!
+}
